@@ -1,0 +1,67 @@
+# ============================================================
+#  DEV 环境配置（本地开发激活的默认 profile）
+#  特点：
+#   · Debug 级日志 + MyBatis 控制台 SQL 打印
+#   · Hikari 连接池小（开发一般 1~2 人）
+#   · DB SSL 关闭（本地一般不开）
+#   · CORS 放行 localhost 全部常用端口
+# ============================================================
+
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/edu_schedule_ai?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    # ---------- HikariCP 连接池（DEV 小规格）----------
+    hikari:
+      # 最小空闲连接数（闲置保留在池中的连接数）
+      minimum-idle: 2
+      # 最大连接池大小（同时可从池中借出的最大连接数）
+      maximum-pool-size: 10
+      # 连接最大空闲时间（毫秒）：超过没被复用就回收
+      idle-timeout: 600000          # 10 分钟
+      # 连接最大生命周期（毫秒）：到期必回收，防止 MySQL 8h 关闭闲置连接
+      max-lifetime: 1800000         # 30 分钟
+      # 获取连接的最长等待时间（毫秒）：超过抛 SQLException
+      connection-timeout: 30000     # 30 秒
+      # 连接测试 SQL（MySQL 专用，比 SELECT 1 更高效）
+      connection-test-query: SELECT 1
+      # 池名（日志 / 监控中可辨识）
+      pool-name: EduScheduleHikariDev
+
+mybatis:
+  configuration:
+    # DEV：把每个 SQL / 参数 / 结果行数都打印到控制台，方便调试
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+edu:
+  # DEV：线程池调小（避免本地 IDE 常年占 4 条大线程空闲栈 5-8MB）
+  async:
+    schedule:
+      core-pool-size: 1
+      max-pool-size: 2
+      queue-capacity: 4
+      keep-alive-seconds: 60
+      await-termination-seconds: 60
+      thread-name-prefix: schedule-
+    sys:
+      core-pool-size: 1
+      max-pool-size: 4
+      queue-capacity: 16
+      keep-alive-seconds: 60
+      await-termination-seconds: 30
+      thread-name-prefix: sys-
+
+  cors:
+    allowed-origins:
+      - http://localhost:5173
+      - http://127.0.0.1:5173
+      - http://localhost:3000
+      - http://127.0.0.1:3000
+      - http://localhost:8080
+      - http://127.0.0.1:8080
+
+logging:
+  level:
+    # DEV：本项目业务代码打 debug（看 SQL 执行/拦截器细节）
+    com.edu.schedule: debug
+    # MyBatis 包本身 info，避免 debug 再打出一大层
+    org.mybatis: info

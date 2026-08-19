@@ -1,0 +1,137 @@
+# ============================================================
+#  智能教务排课系统 —— 公共配置文件
+#  环境拆分策略：
+#    application.yml       ← 公共配置（所有环境共享，不随环境变化的字段）
+#    application-dev.yml   ← 本地 / 开发环境（debug 日志、stdout SQL、小连接池）
+#    application-prod.yml  ← 生产环境（info 日志、关闭 stdout SQL、优化 Hikari、严格 CORS）
+#
+#  激活方式（二选一）：
+#    A) JVM 参数：mvn spring-boot:run -Dspring-boot.run.profiles=prod
+#    B) 环境变量：set SPRING_PROFILES_ACTIVE=prod (Windows) 或 export SPRING_PROFILES_ACTIVE=prod (Linux)
+#  不指定 profile 时，默认激活 dev（见 spring.profiles.default）
+# ============================================================
+
+server:
+  port: 8080
+  # ---------- 优雅停机（Spring Boot 2.3+ 内置）----------
+  # 接收到 SIGTERM / ctrl+c 后：
+  #   ① 先停止接收新请求（返回 503 / Nginx 主动切上游）
+  #   ② 等待正在处理中的 HTTP 请求 + @Async 线程池任务结束
+  #   ③ 最多等 spring.lifecycle.timeout-per-shutdown-phase（90s），到了强制 kill
+  shutdown: graceful
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: edu-schedule-ai
+  profiles:
+    # 默认激活 dev；生产部署必须显式指定 prod
+    default: dev
+    # profile 组：可扩展 spring.profiles.group.prod=prod,mysql8 等组合
+    group:
+      dev: dev
+      prod: prod
+
+  # ---------- 优雅停机总超时（覆盖所有 SmartLifecycle Bean，包括上面的 ThreadPoolTaskExecutor）----------
+  # 线程池自身 awaitTerminationSeconds 建议比这里小
+  lifecycle:
+    timeout-per-shutdown-phase: 90s
+
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    # --- 公共 DB 连接串（字符集/时区/公钥获取）---
+    # 各环境的 url 覆盖只需要替换 host:port/database 部分
+    base-url-template: "jdbc:mysql://{host}:{port}/{db}?useUnicode=true&characterEncoding=utf8&useSSL={useSSL}&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true"
+    username: root
+    # 第 3 项落地：生产环境用 DB_PWD / DB_USER 环境变量覆盖
+    password: ${DB_PWD:123456}
+
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.edu.schedule.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    # ⚠️ SQL 日志输出：各环境覆盖
+    #   dev: org.apache.ibatis.logging.stdout.StdOutImpl（控制台打印每一条 SQL）
+    #   prod: org.apache.ibatis.logging.nologging.NoLoggingImpl（不打印任何 SQL，防泄露）
+
+pagehelper:
+  helper-dialect: mysql
+  reasonable: true
+  support-methods-arguments: true
+
+edu:
+  jwt:
+    # 第 3 项落地：生产环境通过 JWT_SECRET 环境变量覆盖为 64+ 位随机串
+    # 开发环境直接用默认值即可，避免本地跑不起来
+    secret: ${JWT_SECRET:edu-schedule-ai-secret-key-please-change-in-production-2024-very-long}
+    expire: 86400      # Token 有效期：1 天（秒）
+    header: Authorization
+  ai:
+    connect-timeout: 20000   # 20s 建立连接超时
+    read-timeout: 120000     # 120s 大模型响应等待
+  # ======== CORS 跨域白名单（第 2 项落地）========
+  # setAllowCredentials=true 时禁止用 "*"，必须显式列出允许的前端来源
+  # 注意：各环境建议在独立 profile 中覆盖！
+  #   dev：本地常用端口（在 application-dev.yml 已有）
+  #   prod：必须只写真实域名，不要写 localhost
+  cors:
+    allowed-origins:
+      - http://localhost:5173
+      - http://127.0.0.1:5173
+
+  # ======== 注册安全（第 7 项落地：开放注册 + 图形验证码 + 双维度限流）========
+  # 生产请显式覆盖为 registration-enabled: false（只允许教务端建账号，最安全）
+  auth:
+    registration-enabled: true
+    captcha:
+      image-width: 130
+      image-height: 48
+      code-length: 4
+      expire-seconds: 180
+      charset: "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+    rate-limit:
+      captcha-max-requests: 30
+      captcha-window-seconds: 60
+      register-ip-max-attempts: 30
+      register-ip-window-seconds: 60
+      register-user-max-attempts: 5
+      register-user-window-seconds: 180
+
+  # ======== 异步线程池（第 6 项落地，配合 AsyncConfig.java 使用）========
+  # 排课是重型 CPU+IO 混合任务，不能无限并发；
+  # sys 池预留给批量导入、系统通知、邮件等轻量 IO 短任务。
+  # 拒绝策略：CallerRunsPolicy（队列满时 HTTP 提交线程自己跑，形成背压，不丢任务）
+  async:
+    schedule:
+      core-pool-size: 2          # 常驻核心线程（同时可跑 2 个学期/校区的排课）
+      max-pool-size: 4           # 峰值最多 4 条（再多 CPU 已经打满了）
+      queue-capacity: 8          # 等待队列 8 个（最多接受 4+8=12 个并发/排队）
+      keep-alive-seconds: 120    # 非核心线程空闲 2min 回收
+      await-termination-seconds: 60
+      thread-name-prefix: schedule-
+    sys:
+      core-pool-size: 2
+      max-pool-size: 10
+      queue-capacity: 50
+      keep-alive-seconds: 60
+      await-termination-seconds: 30
+      thread-name-prefix: sys-
+
+# 日志级别（各 profile 覆盖 level，公共部分写默认值）
+logging:
+  level:
+    # Spring 框架默认 info，避免 debug 日志刷屏
+    org.springframework: info
+    # AI / OpenAPI 包默认 info，减少大模型调用内部细节
+    org.springframework.ai: info

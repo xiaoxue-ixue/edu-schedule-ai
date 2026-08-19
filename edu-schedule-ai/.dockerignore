@@ -1,0 +1,58 @@
+# ============================================================
+# 后端 .dockerignore —— 这些文件不要被 COPY 进 Docker 构建上下文
+#  作用：① 减小 docker build 的 context 大小（target/.git 很大）
+#        ② 防止 IDE/本地配置泄露进镜像
+#        ③ 保证 Docker 构建是"干净的"，完全依赖 pom.xml + src 重编译
+# ============================================================
+
+# --- Maven 构建产物（Docker builder 阶段会重新 package，本地 target 一定不要传）---
+target/
+*.jar
+*.war
+*.ear
+
+# --- 版本控制 ---
+.git/
+.gitignore
+.gitattributes
+.svn/
+
+# --- IDE 配置（个人配置，不要进镜像）---
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+.settings/
+.classpath
+.project
+*.swp
+*.swo
+*~
+
+# --- 日志 & 临时文件 ---
+logs/
+*.log
+*.tmp
+*.bak
+.DS_Store
+Thumbs.db
+
+# --- 系统/环境文件（不要把本地的环境变量/配置拷进去）---
+.env
+.env.local
+*.pid
+*.seed
+*.pid.lock
+
+# --- 前端无关（保险起见）---
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+dist/
+
+# --- 备份/测试相关 ---
+backup/
+test-output/
+coverage/

@@ -1,0 +1,44 @@
+# ========== 敏感文件（绝对不能上传！）==========
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# ========== IDE / 编辑器缓存 ==========
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.project
+.classpath
+.settings/
+
+# ========== Java 后端 (edu-schedule-ai) ==========
+edu-schedule-ai/target/
+edu-schedule-ai/logs/
+edu-schedule-ai/*.log
+edu-schedule-ai/hsqldb/
+edu-schedule-ai/db/
+*.class
+hs_err_pid*
+replay_pid*
+java_pid*.hprof
+heapdump*.hprof
+
+# ========== 前端 (edu-schedule-ai-web) ==========
+edu-schedule-ai-web/node_modules/
+edu-schedule-ai-web/dist/
+edu-schedule-ai-web/.vite/
+edu-schedule-ai-web/*.local
+
+# ========== 系统文件 ==========
+.DS_Store
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ========== Docker 本地数据卷 ==========
+docker/mysql-data/
+docker/redis-data/

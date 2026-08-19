@@ -1,0 +1,119 @@
+# ============================================================
+#  PROD 环境配置（生产部署必须显式激活）
+#  激活命令：
+#    Windows CMD : set SPRING_PROFILES_ACTIVE=prod && mvn spring-boot:run
+#    Linux/Bash  : SPRING_PROFILES_ACTIVE=prod java -jar edu-schedule-ai.jar
+#  特点：
+#   · 仅 Info 级日志，MyBatis 完全关闭 SQL 输出（防止泄露业务数据）
+#   · Hikari 连接池按生产并发调优（核心 10 / 峰值 50）
+#   · useSSL=false（本地验证 prod 时用；真上服务器且 MySQL 已配置 SSL 证书时改回 useSSL=true）
+#   · CORS 必须手工填真实域名，绝不放 localhost
+#   · 所有敏感信息强制从环境变量读取（yml 里无默认值）
+# ============================================================
+
+server:
+  port: 8080
+  # 生产环境建议前端 Nginx 反向代理，保留 / 或统一 context-path
+  # servlet:
+  #   context-path: /edu-api
+
+spring:
+  datasource:
+    # --- PROD 强制通过环境变量指定 DB 地址 ---
+    # 需要设置的环境变量：
+    #   DB_HOST       数据库地址（内网域名优先，如 mysql-internal:3306）
+    #   DB_NAME       数据库名（默认 edu_schedule_ai）
+    #   DB_USER       数据库账号（建议不要用 root，建只读/读写分离账号）
+    #   DB_PWD        数据库密码（强密码，>= 16 位）
+    #
+    # ⚠️ 本地验证 prod 时：useSSL=false + allowPublicKeyRetrieval=true
+    #    真上生产服务器（MySQL 已配置 SSL/TLS 证书）：
+    #      改回  useSSL=true&allowPublicKeyRetrieval=false
+    url: jdbc:mysql://${DB_HOST:localhost}:3306/${DB_NAME:edu_schedule_ai}?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: ${DB_USER:root}
+    # PROD 不提供 DB_PWD 默认值——未设置时 Spring 启动会立即失败，防止裸连
+    password: ${DB_PWD}
+
+    # ---------- HikariCP 连接池（PROD 生产规格）----------
+    hikari:
+      minimum-idle: 10
+      maximum-pool-size: 50
+      idle-timeout: 300000            # 5 分钟（生产流量一般高，短点利于回收）
+      max-lifetime: 1800000           # 30 分钟（<= MySQL wait_timeout 一般 28800s）
+      connection-timeout: 10000       # 10 秒（生产快速失败，不排队耗死线程）
+      validation-timeout: 5000        # 5 秒（连接健康检查超时）
+      leak-detection-threshold: 60000 # 60 秒（连接持有超过 60s 打 warn 日志，排查慢 SQL）
+      connection-test-query: SELECT 1
+      pool-name: EduScheduleHikariProd
+      # 生产建议开启只读连接：把查询 SQL 路由到只读库
+      # read-only: false
+      # catalog: edu_schedule_ai
+
+mybatis:
+  configuration:
+    # PROD：完全关闭 SQL 日志（NoLoggingImpl 不打印任何东西，防止 SELECT password / 学生信息泄露）
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
+
+edu:
+  # PROD：按真实并发调整，建议初期 core=4 / max=8；学校开学高峰期可调到 core=8 / max=16
+  # 注意：最大并发数请参考：数据库 Hikari max-pool-size（当前 50）/ AI API 速率限制 / CPU 核心数
+  async:
+    schedule:
+      core-pool-size: 4
+      max-pool-size: 8
+      queue-capacity: 16
+      keep-alive-seconds: 180
+      await-termination-seconds: 120
+      thread-name-prefix: schedule-
+    sys:
+      core-pool-size: 4
+      max-pool-size: 20
+      queue-capacity: 200
+      keep-alive-seconds: 60
+      await-termination-seconds: 60
+      thread-name-prefix: sys-
+
+  jwt:
+    # PROD 不提供默认值——JWT_SECRET 环境变量未设置时立即启动失败
+    # 推荐 64+ 位随机字符串，生成：openssl rand -base64 48
+    secret: ${JWT_SECRET}
+    expire: 43200                  # 12 小时（生产建议更短，配合刷新 Token 机制）
+
+  # ======== PROD CORS 白名单：⚠️ 必须填真实部署域名 ========
+  # 不允许放 localhost / 127.0.0.1 / "*"
+  # 示例：
+  #   - https://edu.example.com
+  #   - https://admin.example.com
+  #   - https://*.example.com
+  cors:
+    allowed-origins:
+      - https://edu.example.com
+      - https://admin.example.com
+
+  # ======== PROD 注册安全（第 7 项加固）========
+  # 生产默认关闭注册，只允许教务管理员在后台创建账号
+  # 如需临时开放，启动时加：--edu.auth.registration-enabled=true 覆盖
+  auth:
+    registration-enabled: false
+    captcha:
+      image-width: 130
+      image-height: 48
+      code-length: 4
+      expire-seconds: 180
+      charset: "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+    rate-limit:
+      captcha-max-requests: 10
+      captcha-window-seconds: 60
+      register-ip-max-attempts: 10
+      register-ip-window-seconds: 60
+      register-user-max-attempts: 3
+      register-user-window-seconds: 180
+
+logging:
+  level:
+    # PROD：业务代码 info 级别（只看关键事件：登录、排课、冲突检测、导出）
+    com.edu.schedule: info
+    # 框架日志 info 即可，生产不要 debug
+    org.springframework: info
+    org.mybatis: info
+  # 生产 logback-spring.xml 会按天滚动写文件到 ./logs/ 目录，这里不写配置（走 logback-spring.xml）
