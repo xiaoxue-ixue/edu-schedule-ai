@@ -4,6 +4,9 @@
 .env.*.local
 *.pem
 *.key
+# 本地私有配置（放密钥用，永不提交）
+application-local.yml
+application-local.yaml
 
 # ========== IDE / 编辑器缓存 ==========
 .idea/
@@ -19,6 +22,8 @@
 edu-schedule-ai/target/
 edu-schedule-ai/logs/
 edu-schedule-ai/*.log
+# 运行时日志（根目录级）
+*.log
 edu-schedule-ai/hsqldb/
 edu-schedule-ai/db/
 *.class
@@ -42,3 +47,11 @@ $RECYCLE.BIN/
 # ========== Docker 本地数据卷 ==========
 docker/mysql-data/
 docker/redis-data/
+
+# ========== AI 工具目录 / 临时备份文件 ==========
+.trae/
+*.bak
+*.bak[0-9]
+*.orig
+*.tmp
+~$*
