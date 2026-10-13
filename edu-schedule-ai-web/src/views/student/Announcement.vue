@@ -83,7 +83,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { Search, User, Clock } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { announcementApi } from '@/api/schedule'
+import { getStudentAnnouncement } from '@/api/student'
 
 const loading = ref(false)
 const list = ref([])
@@ -103,10 +103,18 @@ function typeTagType(t) {
 async function loadData() {
   loading.value = true
   try {
-    const res = await announcementApi.list({ page: query.page, size: query.size, title: query.keyword, content: query.keyword, type: query.type })
+    const res = await getStudentAnnouncement({ title: query.keyword, content: query.keyword, type: query.type })
     const raw = res?.data || []
     const all = Array.isArray(raw) ? raw : (raw.list || raw.records || [])
-    const published = all.filter(x => x.status == null || String(x.status) === '1' || x.status === true)
+    let published = all.filter(x => x.status == null || String(x.status) === '1' || x.status === true)
+    published = published.filter(x => {
+      if (query.keyword) {
+        const kw = query.keyword.toLowerCase()
+        if (!(x.title && x.title.toLowerCase().includes(kw)) && !(x.content && x.content.toLowerCase().includes(kw))) return false
+      }
+      if (query.type && x.type !== query.type) return false
+      return true
+    })
     published.sort((a, b) => {
       const pa = a.priority === 'HIGH' ? 0 : a.priority === 'MEDIUM' ? 1 : 2
       const pb = b.priority === 'HIGH' ? 0 : b.priority === 'MEDIUM' ? 1 : 2

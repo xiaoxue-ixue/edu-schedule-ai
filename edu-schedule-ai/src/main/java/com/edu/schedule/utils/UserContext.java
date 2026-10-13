@@ -30,6 +30,11 @@ public class UserContext {
         return require().getUserId();
     }
 
+    public static String getRole() {
+        LoginUser u = HOLDER.get();
+        return u != null ? u.getRole() : null;
+    }
+
     public static void clear() {
         HOLDER.remove();
     }

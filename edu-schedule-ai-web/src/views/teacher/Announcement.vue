@@ -103,7 +103,7 @@ function typeTagType(t) {
 async function loadData() {
   loading.value = true
   try {
-    const res = await announcementApi.list({ page: query.page, size: query.size, title: query.keyword, content: query.keyword, type: query.type })
+    const res = await announcementApi.list({ page: query.page, size: query.size, keyword: query.keyword, type: query.type })
     const raw = res?.data || []
     const all = Array.isArray(raw) ? raw : (raw.list || raw.records || [])
     const published = all.filter(x => x.status == null || String(x.status) === '1' || x.status === true)

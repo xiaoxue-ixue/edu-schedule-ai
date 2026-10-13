@@ -102,6 +102,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, Plus, Check, Close, MagicStick } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
 import { teacherAvailableTimeApi } from '@/api/baseData'
+import { teacherPortalApi } from '@/api/schedule'
 import request from '@/utils/request'
 
 const userStore = useUserStore()
@@ -141,7 +142,7 @@ function getSaveTeacherId() {
 async function loadSlots() {
   try {
     const res = await request.get('/time-slot', { params: { page: 1, size: 100 } })
-    const raw = res?.data || []
+    allRecords.value = res?.data || []
     const list = Array.isArray(raw) ? raw : (raw.list || raw.records || [])
     if (list?.length) {
       slotOptions.value = list.map(x => ({
@@ -155,10 +156,8 @@ async function loadSlots() {
 async function loadData() {
   loading.value = true
   try {
-    const res = await teacherAvailableTimeApi.list({ page: 1, size: 1000 })
-    const raw = res?.data || []
-    const list = Array.isArray(raw) ? raw : (raw.list || raw.records || [])
-    allRecords.value = list
+    const res = await teacherPortalApi.myAvailableTime()
+    allRecords.value = res?.data || []
   } catch (e) { allRecords.value = [] }
   finally { loading.value = false }
 }

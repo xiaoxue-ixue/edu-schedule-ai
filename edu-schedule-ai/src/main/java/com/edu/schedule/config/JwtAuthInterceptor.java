@@ -11,44 +11,39 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
-/**
- * JWT 鉴权 + 角色权限拦截器
- *
- * 权限矩阵（最小权限原则）：
- *  - 公开（无需登录）：由 WebMvcConfig.excludePathPatterns 管理（/api/auth/login, /api/auth/register）
- *  - 所有登录用户：/api/auth/info、/api/auth/password（个人信息 / 改密码）
- *  - student 角色：/api/student/*（学生端个人中心）
- *  - teacher 角色：/api/teacher-portal/*（教师端个人中心）
- *  - admin 角色：其他所有 /api/*（教务端管理接口，含用户/课程/班级/排课/AI 配置等）
- *
- * 匹配策略：使用 requestURI.startsWith 精确匹配前缀，避免 contains 误命中
- */
 @Component
 public class JwtAuthInterceptor implements HandlerInterceptor {
 
     @Autowired
     private JwtUtils jwtUtils;
 
-    // 所有已登录用户都可访问的路径（改密码、查个人信息）
+    // 所有已登录用户都可访问的路径
     private static final String[] COMMON_PATHS = {
             "/api/auth/info",
             "/api/auth/password"
     };
 
-    // student 角色专属前缀
-    private static final String STUDENT_PREFIX = "/api/student/";
+    // 所有已登录用户都可 GET 的只读接口（公共数据查询）
+    private static final String[] COMMON_READ_PATHS = {
+            "/api/announcement",
+            "/api/term",
+            "/api/time-slot"
+    };
 
     // teacher 角色专属前缀
     private static final String TEACHER_PREFIX = "/api/teacher-portal/";
+    // teacher 专属：可用时间管理（带后端数据隔离）
+    private static final String TEACHER_TIME_PREFIX = "/api/teacher-available-time";
 
-    // 角色常量
+    // student 角色专属前缀
+    private static final String STUDENT_PREFIX = "/api/student/";
+
     private static final String ROLE_ADMIN = "admin";
     private static final String ROLE_TEACHER = "teacher";
     private static final String ROLE_STUDENT = "student";
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
-        // ====== 第一步：JWT 登录态校验（原有逻辑保持不变）======
         String header = request.getHeader("Authorization");
         String token = null;
         if (header != null && header.startsWith("Bearer ")) {
@@ -72,22 +67,30 @@ public class JwtAuthInterceptor implements HandlerInterceptor {
         }
         UserContext.set(new UserContext.LoginUser(userId, username, role));
 
-        // ====== 第二步：基于路径前缀 + 角色的权限校验 ======
         String uri = request.getRequestURI();
-        // 去除 context-path（本项目 context-path 是 "/"，保险起见处理）
         String ctx = request.getContextPath();
         if (ctx != null && !ctx.isEmpty() && uri.startsWith(ctx)) {
             uri = uri.substring(ctx.length());
         }
+        String method = request.getMethod().toUpperCase();
 
-        // 1) 通用接口（改密/个人信息）：所有登录用户均可
+        // 1) 通用接口（改密/个人信息）
         for (String p : COMMON_PATHS) {
             if (uri.startsWith(p)) {
                 return true;
             }
         }
 
-        // 2) student 只能访问 /api/student/*
+        // 2) 公共只读接口（所有登录用户可 GET）
+        if ("GET".equals(method)) {
+            for (String p : COMMON_READ_PATHS) {
+                if (uri.startsWith(p)) {
+                    return true;
+                }
+            }
+        }
+
+        // 3) student 角色：只能访问 /api/student/*
         if (ROLE_STUDENT.equalsIgnoreCase(role)) {
             if (uri.startsWith(STUDENT_PREFIX)) {
                 return true;
@@ -95,20 +98,22 @@ public class JwtAuthInterceptor implements HandlerInterceptor {
             throw new BusinessException(ResultCode.FORBIDDEN, "学生账号无权访问该资源");
         }
 
-        // 3) teacher 只能访问 /api/teacher-portal/*
+        // 4) teacher 角色：可访问 /api/teacher-portal/* + /api/teacher-available-time/*
         if (ROLE_TEACHER.equalsIgnoreCase(role)) {
             if (uri.startsWith(TEACHER_PREFIX)) {
+                return true;
+            }
+            if (uri.startsWith(TEACHER_TIME_PREFIX)) {
                 return true;
             }
             throw new BusinessException(ResultCode.FORBIDDEN, "教师账号无权访问该资源");
         }
 
-        // 4) admin 可以访问所有其他管理接口
+        // 5) admin 可访问所有管理接口
         if (ROLE_ADMIN.equalsIgnoreCase(role)) {
             return true;
         }
 
-        // 5) 未知角色，一律拒绝
         throw new BusinessException(ResultCode.FORBIDDEN, "未知角色：" + role);
     }
 

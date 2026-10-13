@@ -19,8 +19,6 @@ export function executeScheduleAgent(id) {
 export const scheduleDetailApi = createCrud('/schedule-detail')
 
 // ========== 排课冲突检测 ==========
-// ✅ GET /conflict-check 是查列表（分页）
-// ✅ POST /conflict-check/check 是主动跑一次冲突检测
 export function checkConflict(data) {
   return request({ url: `/conflict-check/check`, method: 'post', data })
 }
@@ -42,6 +40,19 @@ export function getScheduleVersionDetail(id) {
   return request({ url: `/schedule-version/${id}/detail`, method: 'get' })
 }
 
+// ========== 教师端专属接口 ==========
+export const teacherPortalApi = {
+  mySchedule(params) {
+    return request({ url: '/teacher-portal/my-schedule', method: 'get', params })
+  },
+  myEvaluation() {
+    return request({ url: '/teacher-portal/my-evaluation', method: 'get' })
+  },
+  myAvailableTime() {
+    return request({ url: '/teacher-portal/my-available-time', method: 'get' })
+  }
+}
+
 // ========== 教师可用时间 ==========
 export const teacherAvailableTimeApi = createCrud('/teacher-available-time')
 
@@ -60,15 +71,13 @@ export const aiQualityAnalysisApi = {
     return request({ url: '/ai-quality-analysis/generate', method: 'post', data })
   },
   getById(id) {
-    return request({ url: `/ai-quality-analysis/${id}`, method: 'get' })
+    return request({ url: '/ai-quality-analysis/' + id, method: 'get' })
   },
   remove(id) {
-    return request({ url: `/ai-quality-analysis/${id}`, method: 'delete' })
+    return request({ url: '/ai-quality-analysis/' + id, method: 'delete' })
   }
-  
 }
 
-// 排课明细一键清空
 export function clearScheduleDetail() {
   return request({ url: '/schedule-detail/clear', method: 'delete' })
 }

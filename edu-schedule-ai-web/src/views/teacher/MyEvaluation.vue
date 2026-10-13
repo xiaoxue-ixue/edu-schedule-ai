@@ -91,13 +91,13 @@
 
       <div class="pagination-wrap">
         <el-pagination
-          v-model:current-page="page.pageNum"
-          v-model:page-size="page.pageSize"
-          :page-sizes="[10, 20, 50]"
-          :total="page.total"
-          layout="total, sizes, prev, pager, next, jumper"
-          @size-change="loadList"
-          @current-change="loadList"
+            v-model:current-page="page.pageNum"
+            v-model:page-size="page.pageSize"
+            :page-sizes="[10, 20, 50]"
+            :total="page.total"
+            layout="total, sizes, prev, pager, next, jumper"
+            @size-change="loadList"
+            @current-change="loadList"
         />
       </div>
     </el-card>
@@ -140,7 +140,7 @@
 import { reactive, ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/store/user'
-import { teachingEvaluationApi } from '@/api/schedule'
+import { teacherPortalApi } from '@/api/schedule'
 import request from '@/utils/request'
 
 const userStore = useUserStore()
@@ -176,34 +176,28 @@ function scoreColor(s) {
   return '#f56c6c'
 }
 
-// ============ 仅看"我"的评价：按当前教师名/ID过滤 ============
-function applyMyFilter(rawList) {
-  const list = rawList || []
-  const me = userStore.user
-  if (!me) return list
-  const name = (me.realName || me.username || '').trim()
-  const uid = me.id ?? me.userId ?? me.teacherId
-  if (!name && !uid) return list
-  return list.filter(x => {
-    const nameMatch = name && (x.teacherName === name || x.teacher === name)
-    const idMatch = uid != null && (x.teacherId === uid || x.teacherID === uid)
-    return nameMatch || idMatch || !name && !uid
-  })
-}
-
 async function loadList() {
   loading.value = true
   try {
-    const params = { pageNum: page.pageNum, pageSize: page.pageSize, termId: query.termId, evaluatorType: query.evaluatorType, keyword: query.keyword }
-    const res = await teachingEvaluationApi.list(params)
-    let list = []
-    if (res?.data) {
-      if (Array.isArray(res.data)) list = res.data
-      else list = res.data.list || res.data.records || []
+    const res = await teacherPortalApi.myEvaluation()
+    const data = res?.data || res || {}
+    let list = data.list || data.records || []
+    // 前端本地过滤
+    if (query.termId) {
+      list = list.filter(x => x.termId === query.termId)
     }
-    const myList = applyMyFilter(list)
-    tableData.value = myList
-    page.total = myList.length
+    if (query.evaluatorType) {
+      list = list.filter(x => x.evaluatorType === query.evaluatorType)
+    }
+    if (query.keyword) {
+      const kw = query.keyword.toLowerCase()
+      list = list.filter(x => (x.courseName || '').toLowerCase().includes(kw) || (x.className || '').toLowerCase().includes(kw))
+    }
+    // 前端分页
+    const start = (page.pageNum - 1) * page.pageSize
+    const end = start + page.pageSize
+    tableData.value = list.slice(start, end)
+    page.total = list.length
   } catch (e) { ElMessage.error('加载评价失败') }
   finally { loading.value = false }
 }
@@ -224,26 +218,23 @@ function statisticScores() {
 
 const totalCount = computed(() => page.total)
 const avgScore = computed(() => {
-  const list = tableData.value || []
-  if (!list.length) return '-'
-  const s = list.map(x => Number(x.overallScore) || 0)
-  return (s.reduce((a,b)=>a+b,0) / s.length).toFixed(2)
+  const all = (tableData.value || []).map(x => Number(x.overallScore) || 0)
+  if (!all.length) return '-'
+  return (all.reduce((a,b)=>a+b,0) / all.length).toFixed(2)
 })
 const maxScore = computed(() => {
-  const list = tableData.value || []
-  if (!list.length) return '-'
-  return Math.max(...list.map(x => Number(x.overallScore) || 0)).toFixed(1)
+  const all = (tableData.value || []).map(x => Number(x.overallScore) || 0)
+  return all.length ? Math.max(...all).toFixed(1) : '-'
 })
 const minScore = computed(() => {
-  const list = tableData.value || []
-  if (!list.length) return '-'
-  return Math.min(...list.map(x => Number(x.overallScore) || 0)).toFixed(1)
+  const all = (tableData.value || []).map(x => Number(x.overallScore) || 0)
+  return all.length ? Math.min(...all).toFixed(1) : '-'
 })
 const excellentRate = computed(() => {
-  const list = tableData.value || []
-  if (!list.length) return 0
-  const cnt = list.filter(x => Number(x.overallScore) >= 90).length
-  return ((cnt / list.length) * 100).toFixed(1)
+  const all = tableData.value || []
+  if (!all.length) return 0
+  const cnt = all.filter(x => Number(x.overallScore) >= 90).length
+  return ((cnt / all.length) * 100).toFixed(1)
 })
 
 onMounted(() => { loadTerms(); loadList() })

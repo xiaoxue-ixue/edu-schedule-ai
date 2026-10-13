@@ -6,7 +6,7 @@ import java.util.List;
 
 @Mapper
 public interface TeacherAvailableTimeMapper {
-    @Select("SELECT * FROM edu_teacher_available_time WHERE teacher_id=#{teacherId} ORDER BY id DESC")
+    @Select("SELECT * FROM edu_teacher_available_time WHERE (#{teacherId} IS NULL OR teacher_id = #{teacherId}) ORDER BY id DESC")
     List<TeacherAvailableTime> selectList(@Param("teacherId") Long teacherId);
 
     @Select("SELECT * FROM edu_teacher_available_time WHERE id=#{id}")
