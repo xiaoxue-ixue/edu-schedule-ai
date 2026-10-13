@@ -27,7 +27,7 @@
      · 后端：新 PS 窗口跑 mvn spring-boot:run '-Dspring-boot.run.profiles=dev'（自动开注册）
      · 前端：当前窗口 npm run dev → http://localhost:5173
 [2] PROD JAR 模式（不用 Docker / 不用 WSL2 · 本地生产验证）
-     · 自动杀端口 + 环境变量（DB_PWD=123456 / JWT_SECRET 已给）
+     · 自动杀端口 + 环境变量（DB_PWD / JWT_SECRET 从项目根 .env 读取，不硬编码）
      · 第一次运行自动 mvn package '-DskipTests' 打 JAR 40.87MB
      · 第一次运行自动 npm run build 出前端 dist 1.74MB
      · 后端 JAR 2C2G 启动 → 提示用 Nginx 或 npx vite preview 托管前端

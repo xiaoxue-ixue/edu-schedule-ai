@@ -135,7 +135,7 @@ edu-schedule/
 | 5 | **数据库外键约束（40 条）** | 3 脚本：`001_cleanup_orphans.sql`（清理 62 行孤儿）→ `002_add_foreign_keys.sql`（40 ALTER TABLE，策略：从属=CASCADE / 引用=SET NULL / 核心基础数据=RESTRICT；**所有 term_id 全用 RESTRICT 防学期误删**）→ `003_apply_foreign_keys.py`（备份+清理+建外键+双重验证） | 003 脚本跑通，verify 计数 40 条正确 |
 | 6 | **@Async 自定义线程池** | `AsyncConfig` 实现 AsyncConfigurer：`scheduleExecutor(core=1 max=2 queue=4 keepAlive=60s CallerRunsPolicy)` + `sysExecutor(core=1 max=4 queue=16)`；异常统一处理 | 今日启动日志：两池初始化完成 ✅ |
 | 7 | **注册接口防刷 + 图形验证码** | `CaptchaService` Caffeine(max=50000 expireAfterWrite=180s 一次性校验)；`RateLimitService` 双维度限流（IP 60s/30 次验证码+注册；Username 180s/5 次）；`edu.auth.registration-enabled` 开关（prod 默认 false）；新码 ResultCode：429 / CAPTCHA_INVALID / REGISTRATION_CLOSED | 启动日志：两 Service 初始化参数打印 ✅ + 浏览器面板真实 base64 图 ✅ |
-| **额外** | JWT/DB 密码非硬编码 | `application.yml` 用 `${JWT_SECRET:default-dev-secret-please-change-in-prod}` / `${DB_PASSWORD:123456}` 占位 | — |
+| **额外** | JWT/DB 密码非硬编码 | `application.yml` 用 `${JWT_SECRET}` / `${DB_PWD}` 占位；**两者均无默认值**，未注入即启动失败（fail-fast） | — |
 
 ---
 
@@ -145,7 +145,7 @@ edu-schedule/
 - JDK 17 (`java -version`)
 - Maven 3.9+（`mvn -v`，不要加 `-o`，否则 surefire plugin 离线无法下载）
 - Node.js 18+ / npm 9+
-- MySQL 8.x 端口 3306 监听，root/123456，数据库 `edu_schedule_ai` 已导入 `edu_schedule_ai.sql`
+- MySQL 8.x 端口 3306 监听，数据库 `edu_schedule_ai` 已导入 `edu_schedule_ai.sql`；**root 口令不写死在代码/文档里**，在项目根 `.env` 的 `DB_PWD` 配置
 
 ### 启动顺序（先后端，再前端）
 
@@ -165,7 +165,12 @@ if ($pid8080) {
     Write-Host "8080 端口空闲"
 }
 
-# === 2. 启动（dev 模式 + 开启注册）===
+# === 2. 从项目根 .env 注入 DB 口令（不设置会直接启动失败）===
+foreach ($line in Get-Content "D:\Java Hands-on Project\edu-schedule\.env") {
+    if ($line -match '^\s*DB_PWD\s*=\s*(.+)$') { $env:DB_PWD = $Matches[1].Trim() }
+}
+
+# === 3. 启动（dev 模式 + 开启注册）===
 # ⚠️ PowerShell 5 关键：每个 -D 参数必须用 单引号 包住！！！
 # 否则会报：Unknown lifecycle phase ".run.profiles=dev"
 $env:EDU_AUTH_REGISTRATION_ENABLED = "true"

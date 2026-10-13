@@ -10,8 +10,12 @@ import sys
 import os
 from datetime import datetime
 
-DB = dict(host='localhost', port=3306, user='root', password='123456',
-          database='edu_schedule_ai', charset='utf8mb4')
+DB = dict(host=os.getenv('DB_HOST', 'localhost'), port=int(os.getenv('DB_PORT', '3306')),
+          user=os.getenv('DB_USER', 'root'), password=os.getenv('DB_PWD'),
+          database=os.getenv('DB_NAME', 'edu_schedule_ai'), charset='utf8mb4')
+
+if not DB['password']:
+    sys.exit('未设置环境变量 DB_PWD，请先设置后再运行本脚本（口令不要写死在代码里）')
 
 SQL_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -50,7 +54,8 @@ def backup():
     print_section('① mysqldump 备份整库（强烈推荐）')
     ts = datetime.now().strftime('%Y%m%d_%H%M%S')
     backup_path = os.path.join(os.path.dirname(SQL_DIR), f'backup_edu_schedule_ai_{ts}.sql')
-    cmd = ['mysqldump', '-uroot', '-p123456', '--single-transaction', '--routines', '--triggers', 'edu_schedule_ai']
+    cmd = ['mysqldump', f"-u{DB['user']}", f"-p{DB['password']}",
+           '--single-transaction', '--routines', '--triggers', DB['database']]
     try:
         result = subprocess.run(cmd, capture_output=True, timeout=300)
         if result.returncode != 0:

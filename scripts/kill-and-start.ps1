@@ -23,6 +23,22 @@ $PROJECT_ROOT = (Resolve-Path (Join-Path $SCRIPT_DIR "..")).Path
 $BACKEND_DIR = Join-Path $PROJECT_ROOT "edu-schedule-ai"
 $FRONTEND_DIR = Join-Path $PROJECT_ROOT "edu-schedule-ai-web"
 
+# --- 1b. 读取项目根 .env（未跟踪，存放 DB_PWD / JWT_SECRET 等敏感项）---
+# 口令不硬编码在脚本里，统一由 .env 注入；.env 已在 .gitignore 中忽略
+function Import-DotEnv($path) {
+    if (Test-Path $path) {
+        Get-Content $path | Where-Object { $_ -match '^\s*[^#\s][^=]*=' } | ForEach-Object {
+            $kv = $_ -split '=', 2
+            [Environment]::SetEnvironmentVariable($kv[0].Trim(), $kv[1].Trim(), 'Process')
+        }
+        Write-Host "✔ 已从 .env 加载环境变量：$(Split-Path $path -Leaf)" -ForegroundColor Gray
+    }
+    else {
+        Write-Host "⚠ 未找到 .env（$path）—— 请先配置 DB_PWD，否则后端启动会失败" -ForegroundColor Yellow
+    }
+}
+Import-DotEnv (Join-Path $PROJECT_ROOT ".env")
+
 Write-Host "==============================================================" -ForegroundColor Cyan
 Write-Host " 智能教务 AI 排课系统 · 一键启动菜单" -ForegroundColor Cyan
 Write-Host " 项目根目录 : $PROJECT_ROOT" -ForegroundColor Gray
@@ -89,6 +105,8 @@ if ($choice -eq "1") {
     $backendCmd = @"
 Set-Location '$BACKEND_DIR'
 `$env:EDU_AUTH_REGISTRATION_ENABLED='true'
+`$env:DB_PWD = '$($env:DB_PWD)'
+`$env:JWT_SECRET = '$($env:JWT_SECRET)'
 Write-Host '后端目录:' (Get-Location) -ForegroundColor Cyan
 mvn spring-boot:run '-Dspring-boot.run.profiles=dev'
 "@
@@ -107,9 +125,15 @@ if ($choice -eq "2") {
     Write-Host ""
     Write-Host "🏭 PROD JAR 模式启动中...（不用 Docker / WSL2）" -ForegroundColor Green
 
-    # 5a. 环境变量（本地测试默认：DB_PWD=123456 / JWT_SECRET 32 位固定，上生产请改强随机）
-    $env:DB_PWD    = "123456"
-    $env:JWT_SECRET = "edu-schedule-prod-secret-key-2026-xxxxxxxxxxxx"
+    # 5a. 环境变量：DB_PWD / JWT_SECRET 统一从项目根 .env 读取（不再硬编码在脚本里）
+    if (-not $env:DB_PWD) {
+        Write-Host "✘ 未找到 DB_PWD：请在项目根目录 .env 中配置 DB_PWD 后重试" -ForegroundColor Red
+        pause; exit 1
+    }
+    if (-not $env:JWT_SECRET) {
+        Write-Host "✘ 未找到 JWT_SECRET：请在项目根目录 .env 中配置 JWT_SECRET 后重试" -ForegroundColor Red
+        pause; exit 1
+    }
 
     # 5b. 打包后端（如果 target 下还没有 JAR）
     $jarPath = Join-Path $BACKEND_DIR "target\edu-schedule-ai-1.0.0.jar"

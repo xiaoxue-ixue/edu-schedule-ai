@@ -86,12 +86,15 @@ JWT_SECRET 生成一条 64 位随机串（直接复制这条，输出结果贴 .
 
 **方法 A：命令行 mysqldump 导出（最快，推荐）**
 ```powershell
-# ① 导出本地 MySQL 的 edu_schedule_ai（用你本地 root 密码 123456）
+# 前提：把项目根 .env 里的 DB_PWD 读进当前会话（口令不写死在命令里）
+Get-Content ".\.env" | Where-Object { $_ -match '^\s*DB_PWD\s*=' } | ForEach-Object { $env:DB_PWD = ($_ -split '=',2)[1].Trim() }
+
+# ① 导出本地 MySQL 的 edu_schedule_ai（root 口令取自 .env 的 DB_PWD）
 #    输出文件放到 docker/mysql-init/ 目录（docker-compose 已挂这个目录）
 mkdir -Force "docker\mysql-init" | Out-Null
 
 & "C:\Program Files\MySQL\MySQL Server 8.0\bin\mysqldump.exe" `
-    -h localhost -P 3306 -u root -p123456 `
+    -h localhost -P 3306 -u root "-p$env:DB_PWD" `
     --databases edu_schedule_ai `
     --default-character-set=utf8mb4 `
     --routines --triggers --events `

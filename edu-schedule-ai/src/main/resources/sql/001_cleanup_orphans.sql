@@ -1,6 +1,6 @@
 -- ============================================================
 -- 001_cleanup_orphans.sql —— 清理外键实施前的孤立数据
--- ⚠️ 建议执行前手工备份：mysqldump -uroot -p123456 edu_schedule_ai > backup.sql
+-- ⚠️ 建议执行前手工备份：mysqldump -uroot -p"$DB_PWD" edu_schedule_ai > backup.sql（口令取自环境变量 DB_PWD）
 -- ============================================================
 USE edu_schedule_ai;
 SET FOREIGN_KEY_CHECKS = 0;  -- 清理期间临时关闭外键，防止循环报错

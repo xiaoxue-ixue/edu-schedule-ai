@@ -152,8 +152,8 @@
 > 安全原则：**凡是"在开发环境合理、上生产就会出事"的配置，一律不写到通用 yml，必须到 dev/prod 各自写，而且 prod 给的默认值一定是"最严格的那个"**。
 >
 > 最典型的就是 `DB_PWD` 和 `JWT_SECRET` 两个敏感信息：
-> - dev 里我给了 `${DB_PWD:123456}` 冒号默认值 → 你本地 `mvn spring-boot:run` 不设变量直接能跑，方便；
-> - **prod 里我故意写成 `${DB_PWD}` 没有默认值！** 为什么？—— 防止有人偷懒把 dev 的默认值 123456 直接打包上生产裸跑。如果生产忘了设环境变量，Spring Boot 启动**直接启动失败**报错"Could not resolve placeholder"，比"默默跑了一个月突然被拖库"强一万倍。
+> - **两个一律不给冒号默认值**，全部写成 `${DB_PWD}` / `${JWT_SECRET}`。原因：本仓库是公开仓库，默认值一旦写进 yml 就等于把口令/密钥公开——尤其 JWT 密钥泄露 = 任何人可伪造 token 绕过 RBAC。不设默认值还有个额外好处：忘了注入环境变量时 Spring Boot 启动**直接失败**（报 "Could not resolve placeholder"），比"默默用默认口令跑了一个月被拖库"强一万倍。
+> - 本地开发的便利性用**不入库的 `.env`**（已加入 `.gitignore`）解决：启动前从 `.env` 读 `DB_PWD` / `JWT_SECRET` 注入环境变量即可，既不写死也不影响本地一键启动。
 >
 > 另外 prod 里我还默认关了 2 个：① `edu.auth.registration-enabled: false`（学校教务不开放注册）② 限流阈值 IP 5 次 / User 2 次，比 dev 更严。
 
@@ -209,7 +209,7 @@
 > 对，`depends_on` 只保证 Docker 按顺序创建容器，但 MySQL 容器 running 不代表 mysqld 可以接 SQL（第一次启动还要建 data dir，要 20~30 秒），后端容器会在 10 秒内连不上 DB 直接 CrashLoopBackOff。
 >
 > 我的做法是 **Spring Boot 自带 + Docker healthcheck 两层**：
-> ① **MySQL 侧写 healthcheck**：`healthcheck: test: ["CMD", "mysqladmin", "ping", "-h127.0.0.1", "-uroot", "-p123456"]`，`interval: 5s` / `timeout: 5s` / `retries: 10`，等 mysqladmin ping 成功才算 healthy；
+> ① **MySQL 侧写 healthcheck**：`test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p${DB_PWD} --silent || exit 1"]`（口令取环境变量，不写死），`interval: 10s` / `timeout: 5s` / `start_period: 30s` / `retries: 6`，等 mysqladmin ping 成功才算 healthy；
 > ② **后端 depends_on 加 condition: service_healthy**：`depends_on: mysql: condition: service_healthy`，docker compose 会等到 mysql 变 healthy 再 start backend；
 > ③ **后端自己也有重连机制**（HikariCP `connection-timeout: 8000` + Spring Retry 可加 `@Retryable`），三层保险。
 >
